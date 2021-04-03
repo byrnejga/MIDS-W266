@@ -1,11 +1,12 @@
 
 ## Usual Imports
 import numpy as np
-import matplotlib.pyplot as plt
-import re
+# import matplotlib.pyplot as plt
+# import re
 import json
 import datetime
 import string
+import gc
 
 import tensorflow as tf
 from tensorflow import keras
@@ -161,7 +162,7 @@ def train_model(model,
                 logdir = "tb_dir/",
                 epochs = 30,
                 batch_size = 50,
-                callback = None):
+                callbacks = []):
 
     """
     Train the passed model using the training and validation sets.
@@ -169,14 +170,11 @@ def train_model(model,
     in pipe delimited format
     """
 
-
-    
-
     model.fit(x_train_ids, y_train,
               epochs=epochs,
               batch_size = batch_size,
               validation_data = (x_val_ids, y_val),
-              callbacks=[callback]   )
+              callbacks = callbacks   )
 
     hist = model.history.history
     
@@ -206,15 +204,22 @@ def run_model(embedding_matrix,
               train_embeds = True,  # Whether we allow the embeddings to be changed
               opt = 'adam', 
               logfile = None,
-              logdir = "tb_dir/"):
+              logdir = "tb_dir/",
+              logtag = "tblogs",
+              model_dir = "../models",
+              ):
 
 
     
     tag  = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
-    tblog_dir = f"tblogs-{kernel_sizes}/".replace("[","").replace("]","").replace(", ","") + \
+    tblog_dir = f"{logtag}-{kernel_sizes}/".replace("[","").replace("]","").replace(", ","") + \
             datetime.datetime.now().strftime("%y%m%d-%H%M%S")
 
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=tblog_dir, histogram_freq=1)
+    callbacks = [ keras.callbacks.TensorBoard(log_dir=tblog_dir, histogram_freq=1), 
+                  keras.callbacks.ModelCheckpoint(filepath=model_dir + "/" + tag,
+                                             monitor='val_loss',
+                                             mode='min',
+                                             save_best_only=True) ]
 
 
     model = create_model(embedding_matrix = embedding_matrix,
@@ -235,7 +240,7 @@ def run_model(embedding_matrix,
                        logdir = logdir,
                        epochs = epochs,
                        batch_size = batch_size,
-                       callback = tensorboard_callback)
+                       callbacks = callbacks)
 
     if logfile is not None:
 
@@ -249,6 +254,12 @@ def run_model(embedding_matrix,
                     f.write(f"{hist[metric][i]}|")
             f.write(f"END\n")        
             f.close()
+
+    # Destroy the model to free up GPU memory for the next run
+
+    del model
+    del hist
+    gc.collect()
     
-    return(hist)
+    return(None)
 
